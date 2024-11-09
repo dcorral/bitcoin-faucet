@@ -74,6 +74,17 @@
         color: green;
       }
 
+      .form-actions {
+        display: flex;
+        flex-flow: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .g-recaptcha {
+        margin-top: 10px;
+      }
+
       .gif-container {
         position: absolute;
         z-index: 10;
@@ -121,14 +132,26 @@
     </div>
     <div class="faucet-container">
       <h1>Signet BTC Faucet (0.001 sBTC)</h1>
+
       <input type="text" id="address" placeholder="Enter your Signet address" />
-      <button id="requestBTC">Get Signet BTC</button>
+      <div class="form-actions">
+        <button id="requestBTC">Get Signet BTC</button>
+        <div
+          class="g-recaptcha"
+          data-sitekey="6Lea4nkqAAAAAKOWlfpc5asRV4_kkJQGr81pTM7Q"
+        ></div>
+      </div>
       <div class="message" id="message"></div>
 
       <h2>Last Transactions</h2>
       <div id="transactions" class="transactions">Loading transactions...</div>
     </div>
 
+    <script>
+      // Placeholder for dynamic API_BASE_URL, replaced by the server
+      const API_BASE_URL = "__API_BASE_URL__";
+    </script>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <script>
       function moveGifRandomly() {
         const gif = document.querySelector(".gif-container");
@@ -153,9 +176,7 @@
         const transactionsDiv = document.getElementById("transactions");
 
         try {
-          const response = await fetch(
-            "http://localhost:3000/transactions?limit=10",
-          );
+          const response = await fetch(`${API_BASE_URL}/transactions?limit=10`);
           const data = await response.json();
 
           if (data.success) {
@@ -187,6 +208,15 @@
           const address = document.getElementById("address").value;
           const message = document.getElementById("message");
 
+          // Get the recaptcha token
+          const recaptchaToken = grecaptcha.getResponse();
+
+          if (!recaptchaToken) {
+            message.textContent = "Please complete the CAPTCHA.";
+            message.className = "message error";
+            return;
+          }
+
           if (!address) {
             message.textContent = "Please enter a valid address.";
             message.className = "message error";
@@ -197,12 +227,12 @@
           message.className = "message";
 
           try {
-            const response = await fetch("http://localhost:3000/sendbtc", {
+            const response = await fetch(`${API_BASE_URL}/sendbtc`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ address }),
+              body: JSON.stringify({ address, recaptchaToken }),
             });
 
             const data = await response.json();
@@ -219,6 +249,9 @@
             message.textContent = "Error communicating with the server.";
             message.className = "message error";
           }
+
+          // Reset the reCAPTCHA widget
+          grecaptcha.reset();
         });
 
       window.onload = fetchTransactions;

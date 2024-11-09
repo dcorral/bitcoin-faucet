@@ -1,4 +1,6 @@
 require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const bodyParser = require("body-parser");
 const Client = require("bitcoin-core");
@@ -14,6 +16,8 @@ const {
   BTC_PASS,
   BTC_WALLET,
   BTC_AMOUNT,
+  FRONTEND_URL,
+  CAPTCHA_SECRET,
 } = process.env;
 
 // Define rate limiting rules
@@ -28,7 +32,27 @@ const limiter = rateLimit({
 
 const app = express();
 
-app.use(cors());
+// Define allowed origins dynamically
+const allowedOrigins = (FRONTEND_URL || "http://localhost:3000").split(","); // Allow multiple URLs
+
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      // Origin is allowed
+      callback(null, true);
+    } else {
+      // Origin is not allowed
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+};
+
+app.use(cors(corsOptions));
+
 app.use(bodyParser.json());
 
 const db = new sqlite3.Database("./faucet.db", (err) => {
@@ -62,14 +86,64 @@ const client = new Client({
   wallet: BTC_WALLET,
 });
 
+app.get("/", (req, res) => {
+  const indexHtmlPath = path.join(__dirname, "public", "index.html");
+
+  fs.readFile(indexHtmlPath, "utf8", (err, data) => {
+    if (err) {
+      console.error("Error reading index.html:", err.message);
+      return res.status(500).send("Error loading the page.");
+    }
+
+    const modifiedHtml = data.replace(
+      "__API_BASE_URL__",
+      FRONTEND_URL || "http://localhost:3000",
+    );
+
+    res.send(modifiedHtml);
+  });
+});
+// Serve static frontend files
+app.use(express.static(path.join(__dirname, "public")));
+
 // Faucet endpoint
 app.use("/sendbtc", limiter);
 app.post("/sendbtc", async (req, res) => {
-  const { address } = req.body;
+  const { recaptchaToken, address } = req.body;
 
-  console.log("Received request for address:", address);
   if (!address) {
-    return res.status(400).json({ success: false, error: "Invalid address" });
+    return res.status(400).json({ success: false, error: "Invalid address." });
+  }
+
+  if (!recaptchaToken) {
+    return res
+      .status(400)
+      .json({ success: false, error: "Captcha is required." });
+  }
+
+  // Verify reCAPTCHA
+  try {
+    const captchaResponse = await fetch(
+      `https://www.google.com/recaptcha/api/siteverify`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `secret=${CAPTCHA_SECRET}&response=${recaptchaToken}`,
+      },
+    );
+
+    const captchaResult = await captchaResponse.json();
+
+    if (!captchaResult.success) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Captcha verification failed." });
+    }
+  } catch (error) {
+    console.error("Error verifying reCAPTCHA:", error.message);
+    return res
+      .status(500)
+      .json({ success: false, error: "Captcha verification failed." });
   }
 
   try {
