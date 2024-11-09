@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signet BTC Faucet</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f5f5f5;
+      }
+
+      .faucet-container {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        width: 400px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      h1 {
+        font-size: 24px;
+        margin-bottom: 10px;
+        color: #333;
+      }
+
+      input {
+        width: calc(100% - 20px);
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 16px;
+      }
+
+      button {
+        background-color: #dc5b12;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        width: 100%;
+      }
+
+      button:hover {
+        background-color: #a8410e;
+      }
+
+      .message {
+        margin-top: 15px;
+        font-size: 14px;
+        word-wrap: break-word;
+        word-break: break-all;
+        text-align: center;
+        max-width: 100%;
+      }
+
+      .error {
+        color: red;
+      }
+
+      .success {
+        color: green;
+      }
+
+      .gif-container {
+        position: absolute;
+        z-index: 10;
+      }
+
+      .gif-container img {
+        max-width: 150px;
+        border-radius: 10px;
+      }
+
+      .transactions {
+        margin-top: 20px;
+        text-align: left;
+        font-size: 14px;
+        background: #f9f9f9;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #ddd;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .transaction {
+        margin-bottom: 10px;
+      }
+
+      .transaction span {
+        display: block;
+        margin-bottom: 3px;
+      }
+
+      .transaction-address {
+        font-weight: bold;
+        color: #333;
+      }
+
+      .transaction-amount {
+        color: #dc5b12;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="gif-container">
+      <img src="./assets/peanut.gif" alt="Funny GIF" />
+    </div>
+    <div class="faucet-container">
+      <h1>Signet BTC Faucet (0.001 sBTC)</h1>
+      <input type="text" id="address" placeholder="Enter your Signet address" />
+      <button id="requestBTC">Get Signet BTC</button>
+      <div class="message" id="message"></div>
+
+      <h2>Last Transactions</h2>
+      <div id="transactions" class="transactions">Loading transactions...</div>
+    </div>
+
+    <script>
+      function moveGifRandomly() {
+        const gif = document.querySelector(".gif-container");
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        // Randomly calculate a new position for the GIF
+        const randomX = Math.random() * (screenWidth - gif.offsetWidth);
+        const randomY = Math.random() * (screenHeight - gif.offsetHeight);
+
+        // Apply the new position
+        gif.style.left = `${randomX}px`;
+        gif.style.top = `${randomY}px`;
+      }
+
+      // Move the GIF every 2 seconds
+      setInterval(moveGifRandomly, 1000);
+
+      // Ensure the GIF starts moving when the page loads
+      window.onload = moveGifRandomly;
+
+      async function fetchTransactions() {
+        const transactionsDiv = document.getElementById("transactions");
+
+        try {
+          const response = await fetch(
+            "http://localhost:3000/transactions?limit=10",
+          );
+          const data = await response.json();
+
+          if (data.success) {
+            const transactions = data.transactions;
+            transactionsDiv.innerHTML = "";
+
+            transactions.forEach((tx) => {
+              const txDiv = document.createElement("div");
+              txDiv.className = "transaction";
+
+              txDiv.innerHTML = `
+                    <span class="transaction-address">${tx.address}</span>
+                    <span class="transaction-amount">${tx.timestamp}</span>
+          `;
+              transactionsDiv.appendChild(txDiv);
+            });
+          } else {
+            transactionsDiv.textContent = "Failed to load transactions.";
+          }
+        } catch (error) {
+          transactionsDiv.textContent = "Error loading transactions.";
+          console.error("Error fetching transactions:", error);
+        }
+      }
+
+      document
+        .getElementById("requestBTC")
+        .addEventListener("click", async function () {
+          const address = document.getElementById("address").value;
+          const message = document.getElementById("message");
+
+          if (!address) {
+            message.textContent = "Please enter a valid address.";
+            message.className = "message error";
+            return;
+          }
+
+          message.textContent = "Sending Test BTC...";
+          message.className = "message";
+
+          try {
+            const response = await fetch("http://localhost:3000/sendbtc", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ address }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              message.textContent = `Success! TxID: ${data.txid}`;
+              message.className = "message success";
+              fetchTransactions(); // Refresh transactions after successful request
+            } else {
+              message.textContent = `Error: ${data.error}`;
+              message.className = "message error";
+            }
+          } catch (error) {
+            message.textContent = "Error communicating with the server.";
+            message.className = "message error";
+          }
+        });
+
+      window.onload = fetchTransactions;
+    </script>
+  </body>
+</html>
