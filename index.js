@@ -18,6 +18,8 @@ const {
   BTC_AMOUNT,
   FRONTEND_URL,
   CAPTCHA_SECRET,
+  GITHUB_LINK,
+  TWITTER_LINK,
 } = process.env;
 
 // Define rate limiting rules
@@ -95,10 +97,10 @@ app.get("/", (req, res) => {
       return res.status(500).send("Error loading the page.");
     }
 
-    const modifiedHtml = data.replace(
-      "__API_BASE_URL__",
-      FRONTEND_URL || "http://localhost:3000",
-    );
+    const modifiedHtml = data
+      .replace("__API_BASE_URL__", FRONTEND_URL || "http://localhost:3000")
+      .replace("__GITHUB_LINK__", GITHUB_LINK || "#")
+      .replace("__TWITTER_LINK__", TWITTER_LINK || "#");
 
     res.send(modifiedHtml);
   });
