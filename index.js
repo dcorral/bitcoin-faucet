@@ -33,6 +33,7 @@ const limiter = rateLimit({
 });
 
 const app = express();
+app.set("trust proxy", true);
 
 // Define allowed origins dynamically
 const allowedOrigins = (FRONTEND_URL || "http://localhost:3000").split(","); // Allow multiple URLs
