@@ -5,26 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Signet BTC Faucet</title>
     <style>
-      .social-links {
+      .s-links {
         margin-top: 20px;
         display: flex;
         justify-content: center;
         gap: 15px;
       }
 
-      .social-links a {
+      .s-links a {
         display: inline-block;
       }
 
-      .social-links img {
+      .s-links img {
         width: 30px;
         height: 30px;
         transition: transform 0.2s;
       }
 
-      .social-links img:hover {
+      .s-links img:hover {
         transform: scale(1.1);
       }
+
       body {
         font-family: Arial, sans-serif;
         margin: 0;
@@ -36,7 +37,7 @@
         background-color: #f5f5f5;
       }
 
-      .faucet-container {
+      .f-box {
         background: white;
         padding: 20px;
         border-radius: 10px;
@@ -53,7 +54,7 @@
         color: #333;
       }
 
-      input {
+      .input-address {
         width: calc(100% - 20px);
         padding: 10px;
         margin-bottom: 10px;
@@ -62,7 +63,7 @@
         font-size: 16px;
       }
 
-      button {
+      .btn-request {
         background-color: #dc5b12;
         color: white;
         padding: 10px 15px;
@@ -73,11 +74,11 @@
         width: 100%;
       }
 
-      button:hover {
+      .btn-request:hover {
         background-color: #a8410e;
       }
 
-      .message {
+      .msg-box {
         margin-top: 15px;
         font-size: 14px;
         word-wrap: break-word;
@@ -86,36 +87,36 @@
         max-width: 100%;
       }
 
-      .error {
+      .msg-error {
         color: red;
       }
 
-      .success {
+      .msg-success {
         color: green;
       }
 
-      .form-actions {
+      .f-actions {
         display: flex;
         flex-flow: column;
         align-items: center;
         justify-content: center;
       }
 
-      .g-recaptcha {
+      .g-check {
         margin-top: 10px;
       }
 
-      .gif-container {
+      .gif-box {
         position: absolute;
         z-index: 10;
       }
 
-      .gif-container img {
+      .gif-box img {
         max-width: 150px;
         border-radius: 10px;
       }
 
-      .transactions {
+      .txn-list {
         margin-top: 20px;
         text-align: left;
         font-size: 14px;
@@ -127,145 +128,132 @@
         overflow-y: auto;
       }
 
-      .transaction {
+      .txn-item {
         margin-bottom: 10px;
       }
 
-      .transaction span {
-        display: block;
-        margin-bottom: 3px;
-      }
-
-      .transaction-address {
+      .txn-addr {
         font-weight: bold;
         color: #333;
       }
 
-      .transaction-amount {
+      .txn-amt {
         color: #dc5b12;
       }
     </style>
   </head>
   <body>
-    <input type="text" name="email" style="display: none" />
-    <div class="gif-container">
+    <input type="text" name="userEmail" style="display: none" />
+    <div class="gif-box">
       <img src="./assets/peanut.gif" alt="Funny GIF" />
     </div>
-    <div class="faucet-container">
-      <h2 style="text: center">Say Hi!</h2>
-      <div id="social-links" class="social-links">
-        <a href="__GITHUB_LINK__" target="_blank" id="github-link">
+    <div class="f-box">
+      <h2>Say Hello!</h2>
+      <div id="s-links" class="s-links">
+        <a href="__GITHUB_LINK__" target="_blank" id="link-github">
           <img
             src="./github-logo/github-mark.png"
             alt="GitHub"
-            class="social-logo"
+            class="s-logo"
           />
         </a>
-        <a href="__TWITTER_LINK__" target="_blank" id="twitter-link">
-          <img
-            src="./x-logo/logo-black.png"
-            alt="Twitter"
-            class="social-logo"
-          />
+        <a href="__TWITTER_LINK__" target="_blank" id="link-twitter">
+          <img src="./x-logo/logo-black.png" alt="Twitter" class="s-logo" />
         </a>
       </div>
       <h1>Signet BTC Faucet (0.001 sBTC)</h1>
 
-      <input type="text" id="address" placeholder="Enter your Signet address" />
-      <div class="form-actions">
-        <button id="requestBTC">Get Signet BTC</button>
+      <input
+        type="text"
+        id="btc-address"
+        class="input-address"
+        placeholder="Enter your Signet address"
+      />
+      <div class="f-actions">
+        <button id="btn-get-btc" class="btn-request">Get Signet BTC</button>
         <div
-          class="g-recaptcha"
+          class="g-recaptcha g-check"
           data-sitekey="6Lea4nkqAAAAAKOWlfpc5asRV4_kkJQGr81pTM7Q"
         ></div>
       </div>
-      <div class="message" id="message"></div>
+      <div class="msg-box" id="status-msg"></div>
 
-      <h2>Last Transactions</h2>
-      <div id="transactions" class="transactions">Loading transactions...</div>
+      <h2>Recent Transactions</h2>
+      <div id="txn-container" class="txn-list">Loading transactions...</div>
     </div>
 
     <script>
-      // Placeholder for dynamic API_BASE_URL, replaced by the server
-      const API_BASE_URL = "__API_BASE_URL__";
+      const API_ENDPOINT = "__API_BASE_URL__";
     </script>
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <script>
-      function moveGifRandomly() {
-        const gif = document.querySelector(".gif-container");
+      function moveGif() {
+        const gif = document.querySelector(".gif-box");
         const screenWidth = window.innerWidth;
         const screenHeight = window.innerHeight;
-        // Randomly calculate a new position for the GIF
         const randomX = Math.random() * (screenWidth - gif.offsetWidth);
         const randomY = Math.random() * (screenHeight - gif.offsetHeight);
-
-        // Apply the new position
         gif.style.left = `${randomX}px`;
         gif.style.top = `${randomY}px`;
       }
 
-      // Move the GIF every 2 seconds
-      setInterval(moveGifRandomly, 1000);
+      setInterval(moveGif, 1000);
+      window.onload = moveGif;
 
-      // Ensure the GIF starts moving when the page loads
-      window.onload = moveGifRandomly;
-
-      async function fetchTransactions() {
-        const transactionsDiv = document.getElementById("transactions");
+      async function fetchRecentTxns() {
+        const txnContainer = document.getElementById("txn-container");
 
         try {
-          const response = await fetch(`${API_BASE_URL}/transactions?limit=10`);
+          const response = await fetch(`${API_ENDPOINT}/transactions?limit=10`);
           const data = await response.json();
 
           if (data.success) {
             const transactions = data.transactions;
-            transactionsDiv.innerHTML = "";
+            txnContainer.innerHTML = "";
 
             transactions.forEach((tx) => {
               const txDiv = document.createElement("div");
-              txDiv.className = "transaction";
-
+              txDiv.className = "txn-item";
               txDiv.innerHTML = `
-                    <span class="transaction-address">${tx.address}</span>
-                    <span class="transaction-amount">${tx.timestamp}</span>
-          `;
-              transactionsDiv.appendChild(txDiv);
+                    <span class="txn-addr">${tx.address}</span>
+                    <span class="txn-amt">${tx.timestamp}</span>
+              `;
+              txnContainer.appendChild(txDiv);
             });
           } else {
-            transactionsDiv.textContent = "Failed to load transactions.";
+            txnContainer.textContent = "Failed to load transactions.";
           }
         } catch (error) {
-          transactionsDiv.textContent = "Error loading transactions.";
+          txnContainer.textContent = "Error loading transactions.";
           console.error("Error fetching transactions:", error);
         }
       }
 
       document
-        .getElementById("requestBTC")
+        .getElementById("btn-get-btc")
         .addEventListener("click", async function () {
-          const address = document.getElementById("address").value;
-          const message = document.getElementById("message");
+          const address = document.getElementById("btc-address").value;
+          const message = document.getElementById("status-msg");
 
-          // Get the recaptcha token
           const recaptchaToken = grecaptcha.getResponse();
 
           if (!recaptchaToken) {
             message.textContent = "Please complete the CAPTCHA.";
-            message.className = "message error";
+            message.className = "msg-box msg-error";
             return;
           }
 
           if (!address) {
             message.textContent = "Please enter a valid address.";
-            message.className = "message error";
+            message.className = "msg-box msg-error";
             return;
           }
 
           message.textContent = "Sending Test BTC...";
-          message.className = "message";
+          message.className = "msg-box";
 
           try {
-            const response = await fetch(`${API_BASE_URL}/sendbtc`, {
+            const response = await fetch(`${API_ENDPOINT}/sendbtc`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -277,22 +265,21 @@
 
             if (data.success) {
               message.textContent = `Success! TxID: ${data.txid}`;
-              message.className = "message success";
-              fetchTransactions(); // Refresh transactions after successful request
+              message.className = "msg-box msg-success";
+              fetchRecentTxns();
             } else {
               message.textContent = `Error: ${data.error}`;
-              message.className = "message error";
+              message.className = "msg-box msg-error";
             }
           } catch (error) {
             message.textContent = "Error communicating with the server.";
-            message.className = "message error";
+            message.className = "msg-box msg-error";
           }
 
-          // Reset the reCAPTCHA widget
           grecaptcha.reset();
         });
 
-      window.onload = fetchTransactions;
+      window.onload = fetchRecentTxns;
     </script>
   </body>
 </html>
