@@ -24,8 +24,8 @@ const {
 
 // Define rate limiting rules
 const limiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 60 minutes
-  max: 5, // Limit each IP to 5 requests per window
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 3,
   message: {
     success: false,
     error: "Too many requests, please try again later.",
@@ -114,6 +114,10 @@ app.use("/sendbtc", limiter);
 app.post("/sendbtc", async (req, res) => {
   const { recaptchaToken, address } = req.body;
 
+  if (req.body.email) {
+    return res.status(400).json({ success: false, error: "Fuck off" });
+  }
+
   if (!address) {
     return res.status(400).json({ success: false, error: "Invalid address." });
   }
@@ -137,10 +141,8 @@ app.post("/sendbtc", async (req, res) => {
 
     const captchaResult = await captchaResponse.json();
 
-    if (!captchaResult.success) {
-      return res
-        .status(403)
-        .json({ success: false, error: "Captcha verification failed." });
+    if (!captchaResult.success || captchaResult.score < 0.7) {
+      return res.status(403).json({ success: false, error: "Captcha failed." });
     }
   } catch (error) {
     console.error("Error verifying reCAPTCHA:", error.message);
@@ -175,6 +177,8 @@ app.post("/sendbtc", async (req, res) => {
 
 app.get("/transactions", (req, res) => {
   const limit = parseInt(req.query.limit, 10) || null;
+  if (limit > 10) limit = 10;
+
   let query = `SELECT * FROM transactions ORDER BY timestamp DESC`;
 
   if (limit) {
