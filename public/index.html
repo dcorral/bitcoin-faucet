@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async></script>
     <title>Signet BTC Faucet</title>
     <style>
       .social-links {
@@ -169,16 +170,13 @@
           />
         </a>
       </div>
-      <h1>Signet BTC Faucet (0.001 sBTC)</h1>
+      <h1>Signet BTC Faucet (0.0001 sBTC)</h1>
 
-      <input type="text" id="address" placeholder="Enter your Signet address" />
-      <div class="form-actions">
-        <button id="requestBTC">Get Signet BTC</button>
-        <div
-          class="g-recaptcha"
-          data-sitekey="6Lea4nkqAAAAAKOWlfpc5asRV4_kkJQGr81pTM7Q"
-        ></div>
-      </div>
+      <form onsubmit="onSubmit(event)" id="faucetForm">
+        <input type="text" id="address" name="address" placeholder="Enter your Signet address" />
+	<div class="cf-turnstile" data-sitekey="0x4AAAAAAA1-_SOJvt_LPpVi"></div>
+        <button type="submit">Get Signet BTC</button>
+      </form>
       <div class="message" id="message"></div>
 
       <h2>Last Transactions</h2>
@@ -186,11 +184,7 @@
     </div>
 
     <script>
-      // Placeholder for dynamic API_BASE_URL, replaced by the server
       const API_BASE_URL = "__API_BASE_URL__";
-    </script>
-    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
-    <script>
       function moveGifRandomly() {
         const gif = document.querySelector(".gif-container");
         const screenWidth = window.innerWidth;
@@ -240,20 +234,12 @@
         }
       }
 
-      document
-        .getElementById("requestBTC")
-        .addEventListener("click", async function () {
+        async function onSubmit(event) {
+          event.preventDefault();
+          await new Promise(r => setTimeout(r, 2001));
           const address = document.getElementById("address").value;
           const message = document.getElementById("message");
 
-          // Get the recaptcha token
-          const recaptchaToken = grecaptcha.getResponse();
-
-          if (!recaptchaToken) {
-            message.textContent = "Please complete the CAPTCHA.";
-            message.className = "message error";
-            return;
-          }
 
           if (!address) {
             message.textContent = "Please enter a valid address.";
@@ -264,13 +250,15 @@
           message.textContent = "Sending Test BTC...";
           message.className = "message";
 
+	  const token = event.srcElement[1].defaultValue;
+	if(!token) return;
           try {
             const response = await fetch(`${API_BASE_URL}/sendbtc`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ address, recaptchaToken }),
+              body: JSON.stringify({ address, recaptchaToken: token }),
             });
 
             const data = await response.json();
@@ -279,6 +267,7 @@
               message.textContent = `Success! TxID: ${data.txid}`;
               message.className = "message success";
               fetchTransactions(); // Refresh transactions after successful request
+		    turnstile.reset();
             } else {
               message.textContent = `Error: ${data.error}`;
               message.className = "message error";
@@ -288,9 +277,8 @@
             message.className = "message error";
           }
 
-          // Reset the reCAPTCHA widget
-          grecaptcha.reset();
-        });
+		return false;
+        };
 
       window.onload = fetchTransactions;
     </script>

@@ -41,15 +41,12 @@ const allowedOrigins = (FRONTEND_URL || "http://localhost:3000").split(","); // 
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-
     if (allowedOrigins.indexOf(origin) !== -1) {
       // Origin is allowed
       callback(null, true);
     } else {
       // Origin is not allowed
-      callback(new Error("Not allowed by CORS"));
+      callback(null, false);
     }
   },
 };
@@ -131,7 +128,7 @@ app.post("/sendbtc", async (req, res) => {
   // Verify reCAPTCHA
   try {
     const captchaResponse = await fetch(
-      `https://www.google.com/recaptcha/api/siteverify`,
+      `https://challenges.cloudflare.com/turnstile/v0/siteverify`,
       {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -140,8 +137,7 @@ app.post("/sendbtc", async (req, res) => {
     );
 
     const captchaResult = await captchaResponse.json();
-
-    if (!captchaResult.success || captchaResult.score < 0.7) {
+    if (!captchaResult.success) {
       return res.status(403).json({ success: false, error: "Captcha failed." });
     }
   } catch (error) {
@@ -163,7 +159,7 @@ app.post("/sendbtc", async (req, res) => {
         if (err) {
           console.error("Error inserting into database:", err.message);
         } else {
-          console.log("Transaction logged successfully.");
+          console.log("Transaction logged successfully:", txid);
         }
       },
     );
