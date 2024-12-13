@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async></script>
+    <script
+      src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+      async
+    ></script>
     <title>Signet BTC Faucet</title>
     <style>
       .social-links {
@@ -76,6 +79,14 @@
 
       button:hover {
         background-color: #a8410e;
+      }
+
+      button:disabled,
+      button[disabled] {
+        border: 1px solid #999999;
+        background-color: #cccccc;
+        color: #666666;
+        cursor: wait;
       }
 
       .message {
@@ -170,12 +181,17 @@
           />
         </a>
       </div>
-      <h1>Signet BTC Faucet (0.0001 sBTC)</h1>
+      <h1>Signet BTC Faucet (__BTC_AMOUNT__ sBTC)</h1>
 
       <form onsubmit="onSubmit(event)" id="faucetForm">
-        <input type="text" id="address" name="address" placeholder="Enter your Signet address" />
-	<div class="cf-turnstile" data-sitekey="0x4AAAAAAA1-_SOJvt_LPpVi"></div>
-        <button type="submit">Get Signet BTC</button>
+        <input
+          type="text"
+          id="address"
+          name="address"
+          placeholder="Enter your Signet address"
+        />
+        <div class="cf-turnstile" data-sitekey="__CAPTCHA_KEY__"></div>
+        <button id="submitButton" type="submit">Get Signet BTC</button>
       </form>
       <div class="message" id="message"></div>
 
@@ -234,51 +250,60 @@
         }
       }
 
-        async function onSubmit(event) {
-          event.preventDefault();
-          await new Promise(r => setTimeout(r, 2001));
-          const address = document.getElementById("address").value;
-          const message = document.getElementById("message");
+      async function onSubmit(event) {
+        event.preventDefault();
+        const button = document.getElementById("submitButton");
+        const address = document.getElementById("address").value;
+        document.getElementById("address").value = "";
+        document.getElementById("address").disabled = true;
+        const message = document.getElementById("message");
+        button.disabled = true;
+        message.textContent = "Sending Test BTC...";
+        message.className = "message";
+        await new Promise((r) => setTimeout(r, 2001));
 
+        if (!address) {
+          message.textContent = "Please enter a valid address.";
+          message.className = "message error";
+          return;
+        }
 
-          if (!address) {
-            message.textContent = "Please enter a valid address.";
+        const token = event.srcElement[1].defaultValue;
+        if (!token) return;
+        try {
+          const response = await fetch(`${API_BASE_URL}/sendbtc`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ address, recaptchaToken: token }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            message.textContent = `Success! TxID: ${data.txid}`;
+            message.className = "message success";
+            fetchTransactions(); // Refresh transactions after successful request
+            button.disabled = false;
+            document.getElementById("address").disabled = false;
+            turnstile.reset();
+          } else {
+            message.textContent = `Error: ${data.error}`;
             message.className = "message error";
-            return;
+            button.disabled = false;
+            document.getElementById("address").disabled = false;
           }
+        } catch (error) {
+          message.textContent = "Error communicating with the server.";
+          message.className = "message error";
+          button.disabled = false;
+          document.getElementById("address").disabled = false;
+        }
 
-          message.textContent = "Sending Test BTC...";
-          message.className = "message";
-
-	  const token = event.srcElement[1].defaultValue;
-	if(!token) return;
-          try {
-            const response = await fetch(`${API_BASE_URL}/sendbtc`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ address, recaptchaToken: token }),
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-              message.textContent = `Success! TxID: ${data.txid}`;
-              message.className = "message success";
-              fetchTransactions(); // Refresh transactions after successful request
-		    turnstile.reset();
-            } else {
-              message.textContent = `Error: ${data.error}`;
-              message.className = "message error";
-            }
-          } catch (error) {
-            message.textContent = "Error communicating with the server.";
-            message.className = "message error";
-          }
-
-		return false;
-        };
+        fetchTransactions();
+        return false;
+      }
 
       window.onload = fetchTransactions;
     </script>

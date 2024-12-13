@@ -18,6 +18,7 @@ const {
   BTC_AMOUNT,
   FRONTEND_URL,
   CAPTCHA_SECRET,
+  CAPTCHA_KEY,
   GITHUB_LINK,
   TWITTER_LINK,
 } = process.env;
@@ -96,9 +97,11 @@ app.get("/", (req, res) => {
     }
 
     const modifiedHtml = data
-      .replace("__API_BASE_URL__", FRONTEND_URL || "http://localhost:3000")
-      .replace("__GITHUB_LINK__", GITHUB_LINK || "#")
-      .replace("__TWITTER_LINK__", TWITTER_LINK || "#");
+      .replace("__API_BASE_URL__", FRONTEND_URL)
+      .replace("__GITHUB_LINK__", GITHUB_LINK)
+      .replace("__BTC_AMOUNT__", BTC_AMOUNT)
+      .replace("__CAPTCHA_KEY__", CAPTCHA_KEY)
+      .replace("__TWITTER_LINK__", TWITTER_LINK);
 
     res.send(modifiedHtml);
   });
