@@ -67,16 +67,29 @@ const db = new sqlite3.Database("./faucet.db", (err) => {
         address TEXT NOT NULL,
         amount REAL NOT NULL,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`,
+      );`,
       (err) => {
         if (err) {
-          console.error("Error creating table:", err.message);
+          console.error("Error creating tables:", err.message);
+        }
+      },
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        address TEXT NOT NULL,
+        txid TEXT,
+        status TEXT DEFAULT 'pending',
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      );`,
+      (err) => {
+        if (err) {
+          console.error("Error creating tables:", err.message);
         }
       },
     );
   }
 });
-
 const client = new Client({
   network: "testnet",
   host: BTC_NODE_URL.replace(/^http(s)?:\/\//, ""), // Strip "http://" or "https://"
@@ -149,29 +162,39 @@ app.post("/sendbtc", async (req, res) => {
       .status(500)
       .json({ success: false, error: "Captcha verification failed." });
   }
+  db.run(`INSERT INTO queue (address) VALUES (?)`, [address], function (err) {
+    if (err) {
+      console.error("Error inserting into queue:", err.message);
+      return res
+        .status(500)
+        .json({ success: false, error: "Internal server error." });
+    }
 
-  try {
-    const amount = parseFloat(BTC_AMOUNT);
+    const newRequestId = this.lastID;
 
-    const txid = await client.sendToAddress(address, amount);
-
-    db.run(
-      `INSERT INTO transactions (address, amount) VALUES (?, ?)`,
-      [address, amount],
-      (err) => {
+    db.all(
+      `SELECT id FROM queue WHERE status='pending' ORDER BY id ASC`,
+      [],
+      (err, rows) => {
         if (err) {
-          console.error("Error inserting into database:", err.message);
-        } else {
-          console.log("Transaction logged successfully:", txid);
+          console.error("Error getting queue position:", err.message);
+          return res
+            .status(500)
+            .json({ success: false, error: "Internal server error." });
         }
+
+        const ids = rows.map((r) => r.id);
+        const position = ids.indexOf(newRequestId) + 1;
+
+        res.json({
+          success: true,
+          message: "Your request is added to the queue! ;)",
+          queueId: newRequestId,
+          position,
+        });
       },
     );
-
-    res.json({ success: true, txid });
-  } catch (error) {
-    console.error("Error sending BTC:", error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
+  });
 });
 
 app.get("/transactions", (req, res) => {
@@ -193,6 +216,118 @@ app.get("/transactions", (req, res) => {
     }
   });
 });
+
+app.get("/queue-status", (req, res) => {
+  const { queueId } = req.query;
+  if (!queueId) {
+    return res.status(400).json({ success: false, error: "Missing queueId." });
+  }
+
+  db.get(`SELECT id, status FROM queue WHERE id=?`, [queueId], (err, row) => {
+    if (err) {
+      console.error("Error retrieving queue status:", err.message);
+      return res
+        .status(500)
+        .json({ success: false, error: "Internal server error." });
+    }
+    if (!row) {
+      return res.status(404).json({ success: false, error: "Not found." });
+    }
+
+    if (row.status === "pending") {
+      db.all(
+        `SELECT id FROM queue WHERE status='pending' ORDER BY id ASC`,
+        [],
+        (err, rows) => {
+          if (err) {
+            console.log(err);
+            return res
+              .status(500)
+              .json({ success: false, error: "Internal server error." });
+          }
+          const ids = rows.map((r) => r.id);
+          const position = ids.indexOf(row.id) + 1;
+          res.json({ success: true, status: "pending", position });
+        },
+      );
+    } else if (row.status === "completed") {
+      db.get(`SELECT txid FROM queue WHERE id=?`, [row.id], (err, txRow) => {
+        if (err) {
+          console.log(err);
+          return res
+            .status(500)
+            .json({ success: false, error: "Internal server error." });
+        }
+        res.json({
+          success: true,
+          status: "completed",
+          txid: txRow?.txid || null,
+        });
+      });
+    } else {
+      res.json({ success: true, status: row.status });
+    }
+  });
+});
+
+async function processQueue() {
+  db.get(
+    `SELECT * FROM queue WHERE status='pending' ORDER BY id ASC LIMIT 1`,
+    [],
+    async (err, row) => {
+      if (err) {
+        console.error("Error fetching queue:", err.message);
+        return; // Try again next time
+      }
+      if (!row) {
+        // No pending requests
+        return;
+      }
+
+      try {
+        const amount = parseFloat(BTC_AMOUNT);
+        const txid = await client.sendToAddress(row.address, amount);
+
+        // Update queue status to completed
+        db.run(
+          `UPDATE queue SET status='completed' WHERE id=?`,
+          [row.id],
+          (err) => {
+            if (err) console.error("Error updating queue:", err.message);
+          },
+        );
+
+        // Insert the transaction
+        db.run(
+          `INSERT INTO transactions (address, amount) VALUES (?, ?)`,
+          [row.address, amount],
+          function (err) {
+            if (err) {
+              console.error("Error inserting transaction:", err.message);
+            } else {
+              // Once transaction is inserted, store the txid in the queue
+              // Now we have row.id and txid. Just use them directly.
+              db.run(
+                `UPDATE queue SET txid=? WHERE id=?`,
+                [txid, row.id],
+                (err) => {
+                  if (err)
+                    console.error("Error updating txid in queue:", err.message);
+                },
+              );
+            }
+          },
+        );
+
+        console.log(`Processed queued request ${row.id}: ${txid}`);
+      } catch (error) {
+        console.error("Error sending BTC from queue:", error.message);
+      }
+    },
+  );
+}
+
+setInterval(processQueue, 60000);
 
 app.listen(API_PORT, () => {
   console.log(`Faucet backend running on port ${API_PORT}`);
