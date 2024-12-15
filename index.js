@@ -321,6 +321,15 @@ async function processQueue() {
 
         console.log(`Processed queued request ${row.id}: ${txid}`);
       } catch (error) {
+        if (error.message.includes("Invalid Bitcoin address")) {
+          db.run(
+            `UPDATE queue SET status='completed' WHERE id=?`,
+            [row.id],
+            (err) => {
+              if (err) console.error("Error updating queue:", err.message);
+            },
+          );
+        }
         console.error("Error sending BTC from queue:", error.message);
       }
     },
