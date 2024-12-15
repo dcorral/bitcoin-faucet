@@ -327,7 +327,7 @@ async function processQueue() {
   );
 }
 
-setInterval(processQueue, 60000);
+setInterval(processQueue, 1000);
 
 app.listen(API_PORT, () => {
   console.log(`Faucet backend running on port ${API_PORT}`);
