@@ -183,6 +183,7 @@ app.post("/sendbtc", async (req, res) => {
             .json({ success: false, error: "Internal server error." });
         }
 
+        console.log(rows);
         const ids = rows.map((r) => r.id);
         const position = ids.indexOf(newRequestId) + 1;
 
@@ -271,60 +272,96 @@ app.get("/queue-status", (req, res) => {
 });
 
 async function processQueue() {
-  db.get(
-    `SELECT * FROM queue WHERE status='pending' ORDER BY id ASC LIMIT 1`,
+  db.all(
+    `SELECT * FROM queue WHERE status='pending' ORDER BY id ASC LIMIT 5000`,
     [],
-    async (err, row) => {
+    async (err, rows) => {
       if (err) {
         console.error("Error fetching queue:", err.message);
         return; // Try again next time
       }
-      if (!row) {
+      if (!rows || rows.length === 0) {
         // No pending requests
         return;
       }
 
+      const sends = {};
+      const requestIds = rows.map((r) => r.id);
+      const amount = parseFloat(BTC_AMOUNT);
+      for (const row of rows) {
+        try {
+          const validateResult = await client.validateAddress(row.address);
+          if (validateResult.isvalid) {
+            sends[row.address] = amount;
+            validRows.push(row);
+          } else {
+            db.run(
+              `UPDATE queue SET status='invalid' WHERE id=?`,
+              [row.id],
+              (err) => {
+                if (err)
+                  console.error("Error marking invalid address:", err.message);
+              },
+            );
+          }
+        } catch (validateError) {
+          console.error(
+            `Error validating address ${row.address}:`,
+            validateError.message,
+          );
+          db.run(
+            `UPDATE queue SET status='invalid' WHERE id=?`,
+            [row.id],
+            (err) => {
+              if (err)
+                console.error("Error marking invalid address:", err.message);
+            },
+          );
+        }
+      }
       try {
-        const amount = parseFloat(BTC_AMOUNT);
-        const txid = await client.sendToAddress(row.address, amount);
-
-        // Update queue status to completed
-        db.run(
-          `UPDATE queue SET status='completed' WHERE id=?`,
-          [row.id],
-          (err) => {
-            if (err) console.error("Error updating queue:", err.message);
-          },
+        const txid = await client.sendMany(
+          "",
+          sends,
+          1, // minconf
+          "", // comment
+          [], // subtractFeeFrom (list of addresses to subtract fee from)
+          true, // replaceable (RBF)
+          undefined, // conf_target
+          "unset", // estimate_mode
+          10, // fee_rate in sat/vB (this sets the fee rate)
         );
 
-        // Insert the transaction
+        // Update queue status to completed
+        const placeholders = requestIds.map(() => "?").join(",");
         db.run(
-          `INSERT INTO transactions (address, amount) VALUES (?, ?)`,
-          [row.address, amount],
-          function (err) {
+          `UPDATE queue SET status='completed', txid=? WHERE id IN (${placeholders})`,
+          [txid, ...requestIds],
+          (err) => {
             if (err) {
-              console.error("Error inserting transaction:", err.message);
-            } else {
-              // Once transaction is inserted, store the txid in the queue
-              // Now we have row.id and txid. Just use them directly.
-              db.run(
-                `UPDATE queue SET txid=? WHERE id=?`,
-                [txid, row.id],
-                (err) => {
-                  if (err)
-                    console.error("Error updating txid in queue:", err.message);
-                },
-              );
+              console.error("Error updating queue for batch:", err.message);
             }
           },
         );
 
-        console.log(`Processed queued request ${row.id}: ${txid}`);
+        const insertStmt = db.prepare(
+          `INSERT INTO transactions (address, amount) VALUES (?, ?)`,
+        );
+        for (const addr of Object.keys(sends)) {
+          insertStmt.run([addr, sends[addr]], (err) => {
+            if (err) console.error("Error inserting transaction:", err.message);
+          });
+        }
+        insertStmt.finalize();
+
+        console.log(
+          `Processed ${rows.length} queued requests in a single transaction: ${txid}`,
+        );
       } catch (error) {
         if (error.message.includes("Invalid Bitcoin address")) {
           db.run(
             `UPDATE queue SET status='completed' WHERE id=?`,
-            [row.id],
+            [rows.id],
             (err) => {
               if (err) console.error("Error updating queue:", err.message);
             },
