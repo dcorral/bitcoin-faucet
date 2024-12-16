@@ -183,7 +183,6 @@ app.post("/sendbtc", async (req, res) => {
             .json({ success: false, error: "Internal server error." });
         }
 
-        console.log(rows);
         const ids = rows.map((r) => r.id);
         const position = ids.indexOf(newRequestId) + 1;
 
@@ -288,6 +287,7 @@ async function processQueue() {
       const sends = {};
       const requestIds = rows.map((r) => r.id);
       const amount = parseFloat(BTC_AMOUNT);
+      const validRows = [];
       for (const row of rows) {
         try {
           const validateResult = await client.validateAddress(row.address);
@@ -358,15 +358,6 @@ async function processQueue() {
           `Processed ${rows.length} queued requests in a single transaction: ${txid}`,
         );
       } catch (error) {
-        if (error.message.includes("Invalid Bitcoin address")) {
-          db.run(
-            `UPDATE queue SET status='completed' WHERE id=?`,
-            [rows.id],
-            (err) => {
-              if (err) console.error("Error updating queue:", err.message);
-            },
-          );
-        }
         console.error("Error sending BTC from queue:", error.message);
       }
     },
