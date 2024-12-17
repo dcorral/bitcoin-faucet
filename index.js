@@ -7,6 +7,7 @@ const Client = require("bitcoin-core");
 const cors = require("cors");
 const sqlite3 = require("sqlite3").verbose();
 const rateLimit = require("express-rate-limit");
+const basicAuth = require("express-basic-auth");
 
 const {
   API_PORT,
@@ -21,9 +22,17 @@ const {
   CAPTCHA_KEY,
   GITHUB_LINK,
   TWITTER_LINK,
+  AUTH_USERNAME,
+  AUTH_PASSWORD,
 } = process.env;
 
-// Define rate limiting rules
+if (!AUTH_USERNAME || !AUTH_PASSWORD) {
+  console.error(
+    "AUTH_USERNAME or AUTH_PASSWORD is not set in the environment variables.",
+  );
+  process.exit(1);
+}
+
 const limiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: 3,
@@ -36,24 +45,19 @@ const limiter = rateLimit({
 const app = express();
 app.set("trust proxy", true);
 
-// Define allowed origins dynamically
-const allowedOrigins = (FRONTEND_URL || "http://localhost:3000").split(","); // Allow multiple URLs
+const allowedOrigins = (FRONTEND_URL || "http://localhost:3000").split(",");
 
-// CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
     if (allowedOrigins.indexOf(origin) !== -1) {
-      // Origin is allowed
       callback(null, true);
     } else {
-      // Origin is not allowed
       callback(null, false);
     }
   },
 };
 
 app.use(cors(corsOptions));
-
 app.use(bodyParser.json());
 
 const db = new sqlite3.Database("./faucet.db", (err) => {
@@ -69,9 +73,8 @@ const db = new sqlite3.Database("./faucet.db", (err) => {
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
       );`,
       (err) => {
-        if (err) {
-          console.error("Error creating tables:", err.message);
-        }
+        if (err)
+          console.error("Error creating transactions table:", err.message);
       },
     );
     db.run(
@@ -83,22 +86,28 @@ const db = new sqlite3.Database("./faucet.db", (err) => {
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
       );`,
       (err) => {
-        if (err) {
-          console.error("Error creating tables:", err.message);
-        }
+        if (err) console.error("Error creating queue table:", err.message);
       },
     );
   }
 });
+
 const client = new Client({
   network: "testnet",
-  host: BTC_NODE_URL.replace(/^http(s)?:\/\//, ""), // Strip "http://" or "https://"
+  host: BTC_NODE_URL.replace(/^http(s)?:\/\//, ""),
   port: BTC_NODE_PORT,
   username: BTC_USER,
   password: BTC_PASS,
   allowDefaultWallet: true,
   wallet: BTC_WALLET,
 });
+
+const authMiddleware = basicAuth({
+  users: { [AUTH_USERNAME]: AUTH_PASSWORD },
+  challenge: true,
+});
+
+app.use(authMiddleware);
 
 app.get("/", (req, res) => {
   const indexHtmlPath = path.join(__dirname, "public", "index.html");
@@ -119,11 +128,10 @@ app.get("/", (req, res) => {
     res.send(modifiedHtml);
   });
 });
-// Serve static frontend files
+
 app.use(express.static(path.join(__dirname, "public")));
 
-// Faucet endpoint
-app.use("/sendbtc", limiter);
+app.use("/sendbtc", limiter, authMiddleware);
 app.post("/sendbtc", async (req, res) => {
   const { recaptchaToken, address } = req.body;
 
@@ -197,6 +205,7 @@ app.post("/sendbtc", async (req, res) => {
   });
 });
 
+app.use("/transactions", authMiddleware);
 app.get("/transactions", (req, res) => {
   const limit = parseInt(req.query.limit, 10) || null;
   if (limit > 10) limit = 10;
@@ -217,6 +226,7 @@ app.get("/transactions", (req, res) => {
   });
 });
 
+app.use("/queue-status", authMiddleware);
 app.get("/queue-status", (req, res) => {
   const { queueId } = req.query;
   if (!queueId) {
@@ -366,6 +376,6 @@ async function processQueue() {
 
 setInterval(processQueue, 15000);
 
-app.listen(API_PORT, () => {
-  console.log(`Faucet backend running on port ${API_PORT}`);
-});
+app.listen(API_PORT, () =>
+  console.log(`Faucet backend running on port ${API_PORT}`),
+);
