@@ -26,11 +26,14 @@ const {
   AUTH_PASSWORD,
 } = process.env;
 
-if (!AUTH_USERNAME || !AUTH_PASSWORD) {
-  console.error(
-    "AUTH_USERNAME or AUTH_PASSWORD is not set in the environment variables.",
-  );
-  process.exit(1);
+let authMiddleware;
+if (AUTH_USERNAME && AUTH_PASSWORD) {
+  authMiddleware = basicAuth({
+    users: { [AUTH_USERNAME]: AUTH_PASSWORD },
+    challenge: true,
+  });
+} else {
+  authMiddleware = (req, res, next) => next();
 }
 
 const limiter = rateLimit({
@@ -100,11 +103,6 @@ const client = new Client({
   password: BTC_PASS,
   allowDefaultWallet: true,
   wallet: BTC_WALLET,
-});
-
-const authMiddleware = basicAuth({
-  users: { [AUTH_USERNAME]: AUTH_PASSWORD },
-  challenge: true,
 });
 
 app.use(authMiddleware);
