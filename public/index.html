@@ -19,17 +19,17 @@
     <div class="faucet-container">
       <h2 style="text: center">Say Hi!</h2>
       <div id="social-links" class="social-links">
-        <a href="__GITHUB_LINK__" target="_blank" id="github-link">
-          <img
-            src="./github-logo/github-mark.png"
-            alt="GitHub"
-            class="social-logo"
-          />
-        </a>
         <a href="__TWITTER_LINK__" target="_blank" id="twitter-link">
           <img
             src="./x-logo/logo-black.png"
             alt="Twitter"
+            class="social-logo"
+          />
+        </a>
+        <a href="__GITHUB_LINK__" target="_blank" id="github-link">
+          <img
+            src="./github-logo/github-mark.png"
+            alt="GitHub"
             class="social-logo"
           />
         </a>
@@ -47,6 +47,18 @@
         <button id="submitButton" type="submit">Get Signet BTC</button>
       </form>
       <div class="message" id="message"></div>
+      <div class="additional-btc-instructions">
+        <p>Want an extra __BTC_AMOUNT__ BTC?</p>
+        <ol>
+          <li>
+            Follow me on
+            <a href="__TWITTER_LINK__" target="_blank" id="twitter-link">X</a>
+          </li>
+          <li>Like my pinned post</li>
+          <li>And comment "Hi!" followed by your Signet address</li>
+          <li>WAIT (I'm just a man) 🙏</li>
+        </ol>
+      </div>
 
       <h2>Last Transactions</h2>
       <div id="transactions" class="transactions">Loading transactions...</div>
@@ -137,7 +149,6 @@
             document.getElementById("address").disabled = true;
             document.getElementById("address").value = "";
 
-            // Poll every 5 seconds to check status
             const pollInterval = setInterval(async () => {
               const statusRes = await fetch(
                 `${API_BASE_URL}/queue-status?queueId=${data.queueId}`,

@@ -110,11 +110,11 @@ app.get("/", (req, res) => {
     }
 
     const modifiedHtml = data
-      .replace("__API_BASE_URL__", FRONTEND_URL)
-      .replace("__GITHUB_LINK__", GITHUB_LINK)
-      .replace("__BTC_AMOUNT__", BTC_AMOUNT)
-      .replace("__CAPTCHA_KEY__", CAPTCHA_KEY)
-      .replace("__TWITTER_LINK__", TWITTER_LINK);
+      .replace(/__API_BASE_URL__/g, FRONTEND_URL)
+      .replace(/__GITHUB_LINK__/g, GITHUB_LINK)
+      .replace(/__BTC_AMOUNT__/g, BTC_AMOUNT)
+      .replace(/__CAPTCHA_KEY__/g, CAPTCHA_KEY)
+      .replace(/__TWITTER_LINK__/g, TWITTER_LINK);
 
     res.send(modifiedHtml);
   });
