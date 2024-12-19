@@ -132,7 +132,6 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/sendbtc", limiter, authMiddleware);
 app.post("/sendbtc", async (req, res) => {
   const { recaptchaToken, address } = req.body;
-
   if (req.body.email) {
     return res.status(400).json({ success: false, error: "Fuck off" });
   }
@@ -168,39 +167,67 @@ app.post("/sendbtc", async (req, res) => {
       .status(500)
       .json({ success: false, error: "Captcha verification failed." });
   }
-  db.run(`INSERT INTO queue (address) VALUES (?)`, [address], function (err) {
-    if (err) {
-      console.error("Error inserting into queue:", err.message);
-      return res
-        .status(500)
-        .json({ success: false, error: "Internal server error." });
-    }
 
-    const newRequestId = this.lastID;
+  // Check address limit
+  db.get(
+    `SELECT (SELECT COUNT(*) FROM transactions WHERE address = ?) +
+            (SELECT COUNT(*) FROM queue WHERE address = ?) AS totalCount`,
+    [address, address],
+    (err, row) => {
+      if (err) {
+        console.error("Error checking address limit:", err.message);
+        return res
+          .status(500)
+          .json({ success: false, error: "Internal server error." });
+      }
 
-    db.all(
-      `SELECT id FROM queue WHERE status='pending' ORDER BY id ASC`,
-      [],
-      (err, rows) => {
-        if (err) {
-          console.error("Error getting queue position:", err.message);
-          return res
-            .status(500)
-            .json({ success: false, error: "Internal server error." });
-        }
-
-        const ids = rows.map((r) => r.id);
-        const position = ids.indexOf(newRequestId) + 1;
-
-        res.json({
-          success: true,
-          message: "Your request is added to the queue! ;)",
-          queueId: newRequestId,
-          position,
+      if (row.totalCount >= 3) {
+        return res.status(400).json({
+          success: false,
+          error: "Address limit exceeded. Please try a different address.",
         });
-      },
-    );
-  });
+      }
+
+      // Insert into queue
+      db.run(
+        `INSERT INTO queue (address) VALUES (?)`,
+        [address],
+        function (err) {
+          if (err) {
+            console.error("Error inserting into queue:", err.message);
+            return res
+              .status(500)
+              .json({ success: false, error: "Internal server error." });
+          }
+
+          const newRequestId = this.lastID;
+
+          db.all(
+            `SELECT id FROM queue WHERE status='pending' ORDER BY id ASC`,
+            [],
+            (err, rows) => {
+              if (err) {
+                console.error("Error getting queue position:", err.message);
+                return res
+                  .status(500)
+                  .json({ success: false, error: "Internal server error." });
+              }
+
+              const ids = rows.map((r) => r.id);
+              const position = ids.indexOf(newRequestId) + 1;
+
+              res.json({
+                success: true,
+                message: "Your request is added to the queue! ;)",
+                queueId: newRequestId,
+                position,
+              });
+            },
+          );
+        },
+      );
+    },
+  );
 });
 
 app.use("/transactions", authMiddleware);
