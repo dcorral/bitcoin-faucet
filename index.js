@@ -280,7 +280,7 @@ app.get("/queue-status", (req, res) => {
 
 async function processQueue() {
   db.all(
-    `SELECT * FROM queue WHERE status='pending' ORDER BY id ASC LIMIT 5000`,
+    `SELECT * FROM queue WHERE status='pending' ORDER BY id ASC LIMIT 500`,
     [],
     async (err, rows) => {
       if (err) {
