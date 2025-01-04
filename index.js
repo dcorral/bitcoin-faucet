@@ -184,7 +184,7 @@ app.post("/sendbtc", async (req, res) => {
       if (row.totalCount >= 3) {
         return res.status(400).json({
           success: false,
-          error: "Address limit exceeded. Please try a different address.",
+          error: "Address limit exceeded.",
         });
       }
 
@@ -363,8 +363,7 @@ async function processQueue() {
           [], // subtractFeeFrom (list of addresses to subtract fee from)
           true, // replaceable (RBF)
           undefined, // conf_target
-          "unset", // estimate_mode
-          10, // fee_rate in sat/vB (this sets the fee rate)
+          "conservative", // estimate fee mode
         );
 
         // Update queue status to completed
